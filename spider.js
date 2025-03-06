@@ -11,14 +11,14 @@ const LINK_FILE = path.join(STATE_DIR, "links.txt");
 const PAGE_STATE_FILE = path.join(STATE_DIR, "page-state.json");
 const PROCESSED_STATE_FILE = path.join(STATE_DIR, "processed-state.json");
 const OUTPUT_DIR = path.join(__dirname, "solutions");
-const PROBLEM_ID= "FIT"
 
-// 初始化状态目录
+const PROBLEM_ID = "MAXDIFF"
+const CATEGORY = "INTGRA01"
+
 if (!fs.existsSync(STATE_DIR)) {
   fs.mkdirSync(STATE_DIR, { recursive: true });
 }
 
-// 状态管理函数
 function loadState(filePath, defaultValue) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -54,7 +54,7 @@ async function extractSolutionLinks(page) {
       sleep(20000)
       await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
       
-      // 等待表格加载
+   
       await page.waitForSelector('tbody.MuiTableBody-root', { 
         visible: true,
         timeout: 60000 
@@ -74,18 +74,18 @@ async function extractSolutionLinks(page) {
 
       console.log(`第 ${pageNumber} 页找到 ${pageLinks.length} 个链接`);
       
-      // 追加链接到文件
+ 
       fs.appendFileSync(LINK_FILE, pageLinks.join("\n") + "\n");
       links.push(...pageLinks);
 
-      // 更新分页状态
+
       saveState(PAGE_STATE_FILE, { 
         ...initialState,
         page: pageNumber,
         lastPage: pageNumber
       });
 
-      // 检查下一页是否可用
+  
       const hasNextPage = await page.evaluate(() => {
         const nextButton = document.querySelector('button[aria-label="Next Page"]');
         return nextButton && !nextButton.disabled;
@@ -94,10 +94,10 @@ async function extractSolutionLinks(page) {
       if (!hasNextPage || pageLinks.length === 0) break;
 
       pageNumber++;
-      await sleep(5000 + Math.random() * 3000); // 5-8秒随机延迟
+      await sleep(5000 + Math.random() * 3000); 
     } catch (error) {
       console.error(`获取第 ${pageNumber} 页失败:`, error.message);
-      throw error; // 抛出错误以便外层处理
+      throw error; 
     }
   }
 
@@ -132,19 +132,19 @@ function saveSourceCode( status, submissionId, code, language) {
 }
 
 async function processSolutions(browser) {
-  // 读取所有链接
+
   if (!fs.existsSync(LINK_FILE)) return;
   const allLinks = fs.readFileSync(LINK_FILE, "utf8")
     .split("\n")
     .filter(Boolean);
 
-  // 加载处理进度
+
   const processedState = loadState(PROCESSED_STATE_FILE, {
     processed: [],
     currentIndex: 0
   });
 
-  // 过滤未处理的链接
+
   const unprocessedLinks = allLinks
     .slice(processedState.currentIndex)
     .filter(link => !processedState.processed.includes(link));
@@ -153,14 +153,15 @@ async function processSolutions(browser) {
   for (const [index, link] of unprocessedLinks.entries()) {
     const page = await browser.newPage();
     try {
-      console.log(`正在处理 (${processedState.currentIndex + index + 1}/${allLinks.length}): ${link}`);
+      // console.log(`currentindex : ${processedState.currentIndex} , index : ${index} `)
+      console.log(`正在处理 (${processedState.currentIndex + 1}/${allLinks.length}): ${link}`);
       
       await page.goto(link, { 
         waitUntil: 'networkidle2',
         timeout: 60000 
       });
 
-      // 获取提交信息
+
       const submissionId = link.match(/\/viewsolution\/(\d+)/)[1];
       const [status, problemId, language] = await Promise.all([
         page.$eval('div[class*="_status_container"] > span', el => el.textContent.trim()),
@@ -168,7 +169,7 @@ async function processSolutions(browser) {
         page.$eval('div[class*="_ideLanguageName"]', el => el.textContent.trim())
       ]);
   
-      // 获取源代码
+
       const sourcePage = await browser.newPage();
       await sourcePage.goto(`https://www.codechef.com/viewplaintext/${submissionId}`, {
         waitUntil: 'networkidle2'
@@ -176,10 +177,10 @@ async function processSolutions(browser) {
       const sourceCode = await sourcePage.$eval("body", el => el.innerText);
       await sourcePage.close();
 
-      // 保存源代码
+ 
       saveSourceCode( status, submissionId, sourceCode, language);
 
-      // 更新处理状态
+ 
       processedState.processed.push(link);
       processedState.currentIndex = allLinks.indexOf(link) + 1;
       saveState(PROCESSED_STATE_FILE, processedState);
@@ -187,19 +188,18 @@ async function processSolutions(browser) {
       await sleep(10000 + Math.random() * 2000);
     } catch (error) {
       console.error(`处理失败 (${link}):`, error.message);
-      // 保存当前进度
+
       saveState(PROCESSED_STATE_FILE, {
         processed: processedState.processed,
         currentIndex: allLinks.indexOf(link)
       });
-      throw error; // 终止处理以便手动检查
+      throw error; 
     } finally {
       await page.close();
     }
   }
 }
 
-// 其他辅助函数保持不变...
 
 async function main() {
   const browser = await puppeteer.launch({
@@ -211,12 +211,9 @@ async function main() {
     const page = await browser.newPage();
     await initializePage(page);
 
-    // 登录流程
+    await login(page);
 
-      await login(page);
-
-
-      const resume = process.argv.includes('--resume');
+    const resume = process.argv.includes('--resume');
     // 第一阶段：获取所有提交链接
     if (!resume && !fs.existsSync(LINK_FILE)) {
       console.log("开始获取提交链接...");
@@ -234,7 +231,7 @@ async function main() {
   }
 }
 
-// 新增辅助函数
+
 async function initializePage(page) {
   await page.setViewport({ width: 1280, height: 800 });
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
